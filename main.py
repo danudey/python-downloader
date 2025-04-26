@@ -83,6 +83,8 @@ USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/1
 
 done_event = Event()
 
+cookiejar = browser_cookie3.firefox()
+
 def directory_path(pathname: str):
     pathobj = pathlib.Path(pathname)
     if not pathobj.exists():
@@ -105,7 +107,6 @@ def filename_from_content_disposition(header_value: str):
 
 def copy_url(task_id: TaskID, url: str, path: pathlib.Path, default_filename: str = None) -> None:
     """Copy data from a url to a local file."""
-    cookiejar = browser_cookie3.firefox()
     try:
         response = requests.get(url, headers={"User-Agent": USER_AGENT}, stream=True, cookies=cookiejar)
     except requests.exceptions.ConnectionError:
