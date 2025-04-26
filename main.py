@@ -190,7 +190,7 @@ def download(urls: Iterable[str], dest_dir: Optional[pathlib.Path]):
                     )
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
     parser.register("type", "directory", directory_path)
     parser.add_argument(
@@ -206,3 +206,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     download(args.urls, dest_dir=args.dest)
+
+
+if __name__ == "__main__":
+    main()
