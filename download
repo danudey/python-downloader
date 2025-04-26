@@ -1,0 +1,151 @@
+#!/usr/bin/env -S uv run --script
+
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#   "rich",
+#   "humanfriendly",
+#   "browser-cookie3",
+#   "requests",
+# ]
+# ///
+
+"""
+A rudimentary URL downloader (like wget or curl) to demonstrate Rich progress bars.
+"""
+
+import signal
+import pathlib
+import argparse
+
+from functools import partial
+from threading import Event
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Iterable, Optional
+
+import urllib.error
+from urllib.request import urlopen, Request
+
+import requests
+
+from email.headerregistry import ContentDispositionHeader
+
+import humanfriendly
+
+from rich.progress import (
+    BarColumn,
+    DownloadColumn,
+    Progress,
+    TaskID,
+    TextColumn,
+    TimeRemainingColumn,
+    TransferSpeedColumn,
+)
+
+progress = Progress(
+    TextColumn("[bold blue]{task.fields[filename]}", justify="right"),
+    BarColumn(bar_width=None),
+    "[progress.percentage]{task.percentage:>3.1f}%",
+    "•",
+    DownloadColumn(),
+    "•",
+    TransferSpeedColumn(),
+    "•",
+    TimeRemainingColumn(),
+)
+
+class DestinationDoesNotExist(Exception):
+    pass
+
+class DestinationIsNotDirectory(Exception):
+    pass
+
+
+USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0"
+
+done_event = Event()
+
+def directory_path(pathname):
+    pathobj = pathlib.Path(pathname)
+    if not pathobj.exists():
+        raise DestinationDoesNotExist("Destination dir does not exist")
+
+    if not pathobj.is_dir():
+        raise DestinationIsNotDirectory("Destination must be a directory")
+
+    return pathobj
+
+def handle_sigint(signum, frame):
+    done_event.set()
+
+signal.signal(signal.SIGINT, handle_sigint)
+
+def filename_from_content_disposition(header_value):
+    header = ContentDispositionHeader()
+    params = dict(header.value_parser(header_value).params)
+    return params['filename']
+
+def copy_url(task_id: TaskID, url: str, path: pathlib.Path, default_filename: str) -> None:
+    """Copy data from a url to a local file."""
+    request = Request(url, headers={"User-Agent": USER_AGENT})
+    try:
+        response = urlopen(request)
+    except urllib.error.HTTPError:
+        progress.remove_task(task_id)
+        raise
+
+    if disposition := response.getheader("content-disposition"):
+        filename = filename_from_content_disposition(disposition)
+        progress.update(task_id=task_id, filename=filename)
+    else:
+        filename = default_filename
+
+    # This will break if the response doesn't contain content length
+    if content_length := response.getheader("Content-length"):
+        content_length = int(content_length)
+
+    output_file_path = path.joinpath(filename)
+
+    progress.update(task_id, total=content_length)
+    with output_file_path.open("wb") as dest_file:
+        progress.start_task(task_id)
+        for data in iter(partial(response.read, 32768), b""):
+            dest_file.write(data)
+            progress.update(task_id, advance=len(data))
+            if done_event.is_set():
+                return
+    progress.remove_task(task_id)
+    progress.console.log(f"Downloaded {url} to {output_file_path}")
+
+
+def download(urls: Iterable[str], dest_dir: Optional[pathlib.Path]):
+    """Download multiple files to the given directory."""
+
+    future_to_url = {}
+
+    if not dest_dir:
+        dest_dir = pathlib.Path(".")
+
+    with progress:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            for url in urls:
+                default_filename = url.split("/")[-1]
+                task_id = progress.add_task("download", filename=default_filename, start=False)
+                future = pool.submit(copy_url, task_id, url, dest_dir, default_filename)
+                future_to_url[future] = (url, task_id)
+            for future in as_completed(future_to_url):
+                try:
+                    future.result()
+                except urllib.error.HTTPError as exc:
+                    url, task_id = future_to_url[future]
+                    progress.console.log(f"Failed to download '{url}': {exc}")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.register('type', 'directory', directory_path)
+    parser.add_argument("--debug", action="store_true", default=False, help="Debug logging")
+    parser.add_argument("--dest", default=".", type="directory", help="The directory to download files into")
+    parser.add_argument("urls", nargs='+', help="URLs to download")
+    args = parser.parse_args()
+
+    download(args.urls, dest_dir=args.dest)
