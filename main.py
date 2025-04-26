@@ -55,35 +55,43 @@ progress = Progress(
     TimeRemainingColumn(),
 )
 
+
 class DestinationDoesNotExist(Exception):
     pass
+
 
 class DestinationIsNotDirectory(Exception):
     pass
 
+
 class HTTPResponse4xx(Exception):
     pass
+
 
 class HTTPResponse5xx(Exception):
     pass
 
+
 def randomword(length: int):
-   letters = string.ascii_lowercase
-   return ''.join(random.choice(letters) for i in range(length))
+    letters = string.ascii_lowercase
+    return "".join(random.choice(letters) for i in range(length))
+
 
 def find_next_filename(filename: str):
     if not os.path.isfile(filename):
         return filename
-    for i in range(1,1000):
+    for i in range(1, 1000):
         if not os.path.isfile(f"{filename}.{i}"):
             return f"{filename}.{i}"
     return f"{filename}.{randomword(16)}"
+
 
 USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0"
 
 done_event = Event()
 
 cookiejar = browser_cookie3.firefox()
+
 
 def directory_path(pathname: str):
     pathobj = pathlib.Path(pathname)
@@ -95,30 +103,37 @@ def directory_path(pathname: str):
 
     return pathobj
 
+
 def handle_sigint(signum: int, frame: Any):
     done_event.set()
 
+
 signal.signal(signal.SIGINT, handle_sigint)
+
 
 def filename_from_content_disposition(header_value: str):
     header = ContentDispositionHeader()
     params = dict(header.value_parser(header_value).params)
-    return params['filename']
+    return params["filename"]
 
-def copy_url(task_id: TaskID, url: str, path: pathlib.Path, default_filename: str = None) -> None:
+
+def copy_url(
+    task_id: TaskID, url: str, path: pathlib.Path, default_filename: str = None
+) -> None:
     """Copy data from a url to a local file."""
     try:
-        response = requests.get(url, headers={"User-Agent": USER_AGENT}, stream=True, cookies=cookiejar)
+        response = requests.get(
+            url, headers={"User-Agent": USER_AGENT}, stream=True, cookies=cookiejar
+        )
     except requests.exceptions.ConnectionError:
         progress.remove_task(task_id)
         raise
 
-    if disposition := response.headers.get('Content-Disposition', None):
+    if disposition := response.headers.get("Content-Disposition", None):
         filename = filename_from_content_disposition(disposition)
         progress.update(task_id=task_id, filename=filename)
     else:
         filename = default_filename
-
 
     # This will break if the response doesn't contain content length
     if content_length := response.headers.get("Content-length", None):
@@ -160,7 +175,9 @@ def download(urls: Iterable[str], dest_dir: Optional[pathlib.Path]):
             for url in urls:
                 parsed_url = urlparse(url)
                 default_filename = parsed_url.path.split("/")[-1]
-                task_id = progress.add_task("download", start=False, filename=default_filename)
+                task_id = progress.add_task(
+                    "download", start=False, filename=default_filename
+                )
                 future = pool.submit(copy_url, task_id, url, dest_dir, default_filename)
                 future_to_url[future] = (url, task_id)
             for future in as_completed(future_to_url):
@@ -168,14 +185,24 @@ def download(urls: Iterable[str], dest_dir: Optional[pathlib.Path]):
                     future.result()
                 except requests.exceptions.ConnectionError:
                     url, task_id = future_to_url[future]
-                    progress.console.log(f"Failed to download '{url}': couldn't connect to server")
+                    progress.console.log(
+                        f"Failed to download '{url}': couldn't connect to server"
+                    )
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.register('type', 'directory', directory_path)
-    parser.add_argument("--debug", action="store_true", default=False, help="Debug logging")
-    parser.add_argument("--dest", default=".", type="directory", help="The directory to download files into")
-    parser.add_argument("urls", nargs='+', help="URLs to download")
+    parser.register("type", "directory", directory_path)
+    parser.add_argument(
+        "--debug", action="store_true", default=False, help="Debug logging"
+    )
+    parser.add_argument(
+        "--dest",
+        default=".",
+        type="directory",
+        help="The directory to download files into",
+    )
+    parser.add_argument("urls", nargs="+", help="URLs to download")
     args = parser.parse_args()
 
     download(args.urls, dest_dir=args.dest)
