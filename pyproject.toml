@@ -27,6 +27,5 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 
-[tool.setuptools.dynamic]
-entry-points =
-    download = pydownloader.downloader:main
+[project.scripts]
+download = "pydownloader.downloader:main"
