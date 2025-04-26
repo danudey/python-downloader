@@ -1,10 +1,9 @@
 #!/usr/bin/env -S uv run --script
 
 # /// script
-# requires-python = ">=3.12"
+# requires-python = ">=3.8"
 # dependencies = [
 #   "rich",
-#   "humanfriendly",
 #   "browser-cookie3",
 #   "requests",
 # ]
