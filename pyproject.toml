@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "A simple but pretty Python-based multi-URL file downloader"
 readme = "README.md"
 authors = [
-    { name = "Daniel Fox", email = "<danudey@me.com>"}
+    { name = "Daniel Fox", email = "danudey@me.com"}
 ]
 requires-python = ">=3.8"
 license = "MIT"
@@ -29,3 +29,6 @@ classifiers = [
 
 [project.scripts]
 download = "pydownloader.downloader:main"
+
+[tool.uv]
+package = true
