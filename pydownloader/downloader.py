@@ -42,6 +42,9 @@ from rich.progress import (
 import requests
 import browser_cookie3
 
+# Buffer size in bytes
+BUFFER_SIZE = 1 * 1024 * 1024
+
 progress = Progress(
     TextColumn("[bold blue]{task.fields[filename]}", justify="right"),
     BarColumn(bar_width=None),
@@ -152,7 +155,7 @@ def copy_url(
     progress.update(task_id, total=content_length)
     with output_file_path.open("wb") as dest_file:
         progress.start_task(task_id)
-        for data in response.iter_content(chunk_size=32767):
+        for data in response.iter_content(chunk_size=BUFFER_SIZE):
             dest_file.write(data)
             progress.update(task_id, advance=len(data))
             if done_event.is_set():
